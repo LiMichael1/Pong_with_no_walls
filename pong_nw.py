@@ -2,6 +2,7 @@ import random
 import pygame
 import sys
 from pygame.locals import *
+import time
 
 WINDOW_HEIGHT = 600
 WINDOW_WIDTH = 1024
@@ -36,6 +37,19 @@ pygame.mixer.music.load('OOOOH.mp3')
 bounce_sound = pygame.mixer.Sound('bounce.wav')
 
 
+def game_won_sound(player_win):
+    pygame.mixer.music.stop()
+    if player_win:
+        pygame.mixer.music.load('win_sound.mp3')
+    else:
+        pygame.mixer.music.load('lose_sound.mp3')
+    pygame.mixer.music.play()
+    time.sleep(2)
+    pygame.mixer.music.stop()
+    pygame.mixer.music.load('OOOOH.mp3')
+    pygame.mixer.music.play(-1, 0.0)
+
+
 def random_angle():
     while True:
         x, y = random.randint(-4, 4), random.randint(-4, 4)
@@ -67,6 +81,7 @@ class Paddles:
         self.score = 0
         self.up, self.down, self.left, self.right = False, False, False, False
         self.group = [Paddle(side_paddle=True), Paddle(False), Paddle(False)]
+        self.games_won = 0
 
         self.group[0].rect.centery = WINDOW_HEIGHT / 2
         self.group[1].rect.centery = WINDOW_HEIGHT_DIFF + 15
@@ -143,15 +158,25 @@ class Ball:
 
         return False
 
-    def score(self, player, computer):
+    def score(self, player, computer, player_colors, computer_colors):
         if self.rect.right > WINDOW_WIDTH or \
                 (self.rect.top > WINDOW_HEIGHT_EXTRA and self.rect.centerx > WINDOW_WIDTH / 2) or \
                 (self.rect.bottom < WINDOW_HEIGHT_DIFF and self.rect.centery > WINDOW_WIDTH / 2):
             player.score += 1
+            if player.score >= 5:
+                player.games_won += 1
+                player.score = 0
+                player_colors[player.games_won - 1] = RED
+                game_won_sound(True)
         elif self.rect.left < 0 or \
                 (self.rect.top > WINDOW_HEIGHT_EXTRA and self.rect.centerx < WINDOW_WIDTH / 2 + 1) or \
                 (self.rect.bottom < WINDOW_HEIGHT_DIFF and self.rect.centery < WINDOW_WIDTH / 2 + 1):
             computer.score += 1
+            if computer.score >= 5:
+                computer.games_won += 1
+                computer.score = 0
+                computer_colors[computer.games_won - 1] = RED
+                game_won_sound(False)
 
     def __str__(self):
         return f'The position is ({self.rect.x}, {self.rect.y})'
@@ -238,6 +263,9 @@ def play():
     player = Player()
     computer = Computer()
 
+    player_colors = [YELLOW for _ in range(3)]
+    computer_colors = [YELLOW for _ in range(3)]
+
     ball = Ball()
 
     all_paddles = pygame.sprite.RenderPlain(player.group[0], player.group[1], player.group[2],
@@ -251,8 +279,9 @@ def play():
 
     gameOver = False
     while not gameOver:
-        if player.score == 5 or computer.score == 5:
-            gameOver = True
+        player_match_won = (player.games_won >= 3)
+        computer_match_won = (computer.games_won >= 3)
+        gameOver = player_match_won or computer_match_won
 
         if ball.rect.right > WINDOW_WIDTH or ball.rect.left < 0 \
                 or ball.rect.top > WINDOW_HEIGHT_EXTRA or ball.rect.bottom < WINDOW_HEIGHT_DIFF:
@@ -289,7 +318,13 @@ def play():
         computer.move()
         ball.move()
 
-        ball.score(player, computer)
+        ball.score(player, computer, player_colors, computer_colors)
+
+        for i in range(3):
+            pygame.draw.circle(window_surface, player_colors[i], (int(WINDOW_WIDTH / 4 + ((i - 1) * 30)),
+                               WINDOW_HEIGHT_DIFF - 15), 10)
+            pygame.draw.circle(window_surface, computer_colors[i], (int(3 * WINDOW_WIDTH / 4 + ((i - 1) * 30)),
+                               WINDOW_HEIGHT_DIFF - 15), 10)
 
         if ball.bounce(player.group[0], top_down=False) or \
                 ball.bounce(player.group[1], top_down=True) or \
@@ -304,7 +339,7 @@ def play():
         # player music
     pygame.mixer.music.stop()
 
-    player_won = True if player.score == 5 else False
+    player_won = True if player.games_won >= 3 else False
     game_over_music = winning_music if player_won else losing_music
 
     # Game over
